@@ -1,7 +1,7 @@
 # Repository guide
 
 - Use `uv`: `uv sync`, `uv run pytest`, and `uv run ruff check .`.
-- Keep production code in `src/pink_elephant/` and tests in `tests/`.
+- Keep production code in `src/inference_experiments/` and tests in `tests/`.
 - Write small, typed functions with explicit inputs, outputs, and failures; avoid hidden state.
 - Keep inline code comments to one line and use them only to explain why code exists.
 - Do not use multi-line comments to explain a change; keep that context in documentation or commits.
@@ -20,11 +20,11 @@ Run Python and GPU checks inside the user's Apptainer gdevbox environment. The h
 Start an interactive Bash shell so the aliases in ~/.bashrc are available.
 Run module load apptainer.
 Run gdevbox and wait for the container shell prompt.
-Inside the container, run cd ~/inference-engine.
+Inside the container, run cd ~/inference-experiments.
 Run source .venv/bin/activate before running Python commands.
 For the terminal tool, bash -ic 'module load apptainer; gdevbox' with a PTY opens the container. Send subsequent commands to that same terminal session. If container setup fails with a socket operation not permitted error in the sandbox, request elevated execution through the tool's approval mechanism.
 
-The verified container path is /root/inference-engine; the host workspace path is /u/ycb7rx/inference-engine. After activation, sys.executable is /root/inference-engine/.venv/bin/python, and sys.prefix != sys.base_prefix is true. Activation must be repeated in new container shell sessions.
+The verified container path is /root/inference-experiments; the host workspace path is /u/ycb7rx/inference-experiments. After activation, sys.executable is /root/inference-experiments/.venv/bin/python, and sys.prefix != sys.base_prefix is true. Activation must be repeated in new container shell sessions.
 
 ## Git workflow
 - you will need to do this in the specified dev environment
