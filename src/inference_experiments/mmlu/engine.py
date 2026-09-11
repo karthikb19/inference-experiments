@@ -150,9 +150,15 @@ class VLLMEngine:
                 f"{request.row_id}: vLLM omitted an A-D log probability"
             ) from error
         typed_scores = cast(tuple[float, float, float, float], scores)
-        selected_index = max(range(4), key=typed_scores.__getitem__)
+        try:
+            selected_index = self._answer_token_ids.index(completion.token_ids[0])
+        except ValueError as error:
+            raise InferenceError(
+                f"{request.row_id}: selected token is not an A-D answer"
+            ) from error
         selected: Choice = CHOICES[selected_index]
-        if completion.token_ids[0] != self._answer_token_ids[selected_index]:
+        # Preserve vLLM's selected answer when multiple choices share the maximum.
+        if typed_scores[selected_index] < max(typed_scores):
             raise InferenceError(
                 f"{request.row_id}: selected token and scores disagree"
             )
