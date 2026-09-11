@@ -133,6 +133,9 @@ comparing this result with a quantized model.
 
 ## Inspect results
 
+For a completed full-suite baseline, see the [Qwen3-8B BF16 MMLU report](../reports/qwen3-8b-bf16-full-mmlu.md),
+including category and subject accuracy, runtime, and artifact validation.
+
 A successful output contains four files:
 
 ```bash
