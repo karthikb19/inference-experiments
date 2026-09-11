@@ -16,9 +16,10 @@ or performance delta.
 - Each parquet row has `question: string`, `subject: string`,
   `choices: list[string]`, and `answer: int64`.
 - In gdevbox on `gpusrv02`, vLLM 0.29.0 and Torch 2.13.0+cu130 see four
-  RTX 4000 Ada GPUs. A one-GPU eager-mode smoke test loaded the local checkpoint
-  in BF16, used 15.27 GiB for weights, created a 2.26 GiB KV cache, and generated
-  `vLLM works` from a deterministic prompt.
+  RTX 4000 Ada GPUs. A two-GPU tensor-parallel eager-mode smoke test loaded the
+  local checkpoint in BF16, used 7.64 GiB for weights on each GPU, exposed
+  9.17 GiB of KV-cache memory per worker, and generated `two GPUs work` from a
+  deterministic prompt. Two GPUs are the deployment and evaluation default.
 - The original `.venv` referred to an unavailable host `/sw/...` interpreter.
   Recreating it inside gdevbox with `/usr/bin/python3` produced the required
   `/root/inference-experiments/.venv/bin/python` environment.
@@ -34,11 +35,12 @@ or performance delta.
 
 ## Evaluation protocol
 
-Use the canonical five-shot MMLU shape: prepend the five same-subject dev rows,
-render the test question with choices labelled A through D, and end at the
-answer position. Run Qwen3 in non-thinking mode and choose exactly one of the
-four answer tokens with greedy decoding. Record the four choice log
-probabilities when vLLM exposes them.
+Use the original five-shot MMLU protocol: prepend the five same-subject dev
+rows, render the test question with choices labelled A through D, and end at
+the answer position. Run Qwen3 in non-thinking mode and choose the answer with
+the highest probability among the A, B, C and D tokens. Record all four choice
+log probabilities. This matches the benchmark paper's few-shot setup and
+weighted all-example accuracy rather than introducing a custom chat benchmark.
 
 The protocol is intentionally fixed for baseline-to-quantized comparisons:
 
@@ -61,12 +63,14 @@ project-specific baseline.
 
 ## Reported metrics
 
-The primary quality metric is micro accuracy over all 14,042 test questions.
-Also report:
+The primary quality metric is weighted accuracy over all 14,042 test questions:
+total correct divided by total questions. This is sometimes called micro
+accuracy; the plain-language name is used in reports because it matches the
+original paper and the size-weighted EleutherAI MMLU aggregate. Also report:
 
 - correct, total, and accuracy for each of the 57 subjects;
-- micro accuracy for the standard STEM, humanities, social-sciences, and other
-  subject groups;
+- size-weighted accuracy for the standard STEM, humanities, social-sciences,
+  and other subject groups;
 - macro accuracy across subjects, plus macro accuracy within each group;
 - invalid prediction count, which must be zero for a successful run;
 - engine initialization seconds, evaluation wall seconds, examples/second,
@@ -102,8 +106,12 @@ def aggregate_metrics(
 
 Keep vLLM behind an `InferenceEngine` protocol. Unit tests use a deterministic
 fake engine, so imports and tests do not initialize CUDA. The concrete
-`VLLMEngine` performs local batched inference. This seam also lets a later
-quantized engine use the identical data, prompts, answer decoding and metrics.
+`VLLMEngine` performs local batched inference with tensor parallelism across two
+GPUs. "In-process" means the evaluator imports vLLM and submits many prompts
+directly to one engine in the same Python program. It does not start a web
+server, serialize HTTP requests, or manage server readiness and retries. This
+seam also lets a later quantized engine use identical data, prompts, answer
+decoding and metrics.
 
 ## Files to add
 
@@ -113,7 +121,7 @@ quantized engine use the identical data, prompts, answer decoding and metrics.
   predictions, timing/provenance, metrics and report models.
 - `src/inference_experiments/mmlu/data.py` — strict parquet loading and split
   validation.
-- `src/inference_experiments/mmlu/prompting.py` — canonical five-shot prompt
+- `src/inference_experiments/mmlu/prompting.py` — original five-shot prompt
   rendering and A–D token validation.
 - `src/inference_experiments/mmlu/engine.py` — `InferenceEngine` protocol and
   lazy vLLM adapter.
@@ -130,8 +138,8 @@ quantized engine use the identical data, prompts, answer decoding and metrics.
   assumptions.
 - `tests/mmlu/test_evaluate.py` — fake-engine batching, deterministic output,
   failure behavior and atomic artifacts.
-- `tests/mmlu/test_metrics.py` — micro/macro/category arithmetic and empty or
-  invalid inputs.
+- `tests/mmlu/test_metrics.py` — weighted/macro/category arithmetic and empty
+  or invalid inputs.
 - `tests/test_vllm_serve.py` — serving argument construction without launching
   a server or GPU work.
 - `tests/fixtures/mmlu/` — tiny synthetic parquet fixtures covering multiple
@@ -157,14 +165,14 @@ mmlu-baseline \
   --model models/Qwen3-8B \
   --data-dir data/mmlu/all \
   --output-dir artifacts/mmlu/qwen3-8b-bf16 \
-  --tensor-parallel-size 1 \
+  --tensor-parallel-size 2 \
   --max-model-len 4096 \
   --batch-size 64
 
 serve-qwen3-8b \
   --model models/Qwen3-8B \
   --served-model-name qwen3-8b \
-  --tensor-parallel-size 1
+  --tensor-parallel-size 2
 ```
 
 The offline evaluator should also accept `--limit` and `--subjects` for smoke
@@ -189,7 +197,7 @@ options, not the prompt or scoring protocol.
 
 - A fresh gdevbox `uv sync` installs vLLM and the parquet reader from the lock.
 - The serving command starts an OpenAI-compatible endpoint for the local model
-  and a deterministic request succeeds.
+  with tensor parallelism across two GPUs, and a deterministic request succeeds.
 - The offline smoke command scores a selected subject without network access.
 - Two runs with identical inputs have byte-identical quality outputs; timing
   and environment fields may differ and are isolated from that comparison.
