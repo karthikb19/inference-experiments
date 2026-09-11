@@ -11,6 +11,14 @@ dependencies = [
     "vllm>=0.29.0,<0.30",
 ]
 
+[project.scripts]
+mmlu-baseline = "inference_experiments.mmlu.cli:main"
+serve-qwen3-8b = "inference_experiments.vllm_serve:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
 [dependency-groups]
 dev = [
     "pytest>=8.0.0",
@@ -19,7 +27,7 @@ dev = [
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-pythonpath = ["."]
+pythonpath = ["src", "."]
 
 [tool.ruff]
 line-length = 88

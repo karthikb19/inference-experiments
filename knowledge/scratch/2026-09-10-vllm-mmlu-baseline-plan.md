@@ -7,6 +7,9 @@ checkpoint. The baseline must be easy to repeat for a quantized checkpoint and
 must preserve enough run metadata and row-level output to explain an accuracy
 or performance delta.
 
+Implementation status: complete for the baseline pipeline and two-GPU serving
+entry point. The full 14,042-question benchmark remains to be run.
+
 ## Verified starting point
 
 - The checkpoint is Qwen3-8B in BF16, has a 40,960-token configured context,
@@ -30,8 +33,8 @@ or performance delta.
   dependencies.
 - `uv.lock` captures the resolved GPU/runtime dependency graph, including the
   exact vLLM 0.29.0 and PyArrow 25.0.1 versions validated in gdevbox.
-- This plan and the proposed ADR record the implementation boundary. No MMLU
-  evaluator or full benchmark result is claimed yet.
+- The typed evaluator, serving wrapper, tests, and documentation described
+  below are implemented. No full benchmark result is claimed yet.
 
 ## Evaluation protocol
 
@@ -92,12 +95,15 @@ not bare dictionaries.
 ```python
 def load_mmlu_split(path: Path) -> tuple[MMLUExample, ...]: ...
 
+
 def render_five_shot_prompt(
     example: MMLUExample,
     demonstrations: tuple[MMLUExample, ...],
 ) -> str: ...
 
+
 def evaluate_mmlu(config: EvaluationConfig, engine: InferenceEngine) -> RunReport: ...
+
 
 def aggregate_metrics(
     predictions: tuple[Prediction, ...],
@@ -142,8 +148,9 @@ decoding and metrics.
   or invalid inputs.
 - `tests/test_vllm_serve.py` — serving argument construction without launching
   a server or GPU work.
-- `tests/fixtures/mmlu/` — tiny synthetic parquet fixtures covering multiple
-  subjects and malformed cases.
+- `tests/mmlu/conftest.py` — a helper that creates tiny temporary parquet
+  fixtures for multiple subjects and malformed cases without retaining binary
+  test data in Git.
 
 ## Additional files to update during implementation
 

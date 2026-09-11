@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Date** | 2026-09-10 |
-| **Status** | Proposed |
+| **Status** | Implemented |
 | **Author** | Codex session |
 | **Touches** | `src/inference_experiments/mmlu/`, `tests/mmlu/`, `pyproject.toml`, `uv.lock`, `README.md` |
 | **Invariants** | none |
@@ -104,7 +104,9 @@ service.
 class InferenceEngine(Protocol):
     def predict(self, requests: tuple[InferenceRequest, ...]) -> tuple[Answer, ...]: ...
 
+
 def evaluate_mmlu(config: EvaluationConfig, engine: InferenceEngine) -> RunReport: ...
+
 
 def aggregate_metrics(predictions: tuple[Prediction, ...]) -> EvaluationMetrics: ...
 ```
@@ -163,6 +165,11 @@ health checks, retries and request-order restoration to the benchmark contract.
 > groups of prompts directly. The HTTP alternative starts `vllm serve` as a
 > separate long-running process; the evaluator serializes requests over a local
 > socket and must handle readiness, failures, retries and response ordering.
+>
+> **Samarth:** we want in processes haha for sure.
+>
+> **Resolution:** Agree. Quality evaluation calls the two-GPU vLLM engine
+> directly; HTTP remains a separate serving interface.
 
 **Q4. Should successful artifacts finalize atomically, with resume deferred?**
 Recommendation: agree. A failed run remains visibly partial and cannot be
@@ -219,7 +226,13 @@ benchmark protocols require distinct names rather than overwriting this one.
 
 ## Outcome
 
-Pending the final answer to question 3 and evaluator implementation. The one-
-and two-GPU feasibility smoke tests are complete, and the worktree declares and
-locks vLLM 0.29.x and PyArrow 25.x. Questions 1, 2, 4 and 5 are answered. The
-full MMLU baseline remains unmeasured.
+Implemented in `src/inference_experiments/mmlu/` with two console entry points,
+strict parquet validation, original five-shot prompting, constrained A-D
+probability scoring, weighted/subject/category metrics, checkpoint hashing, and
+atomic partial-to-complete artifacts. All five questions are answered. The
+offline suite has 17 passing tests and mocks inference, CUDA and timing. A live
+two-GPU run scored two `abstract_algebra` test rows at 50% weighted accuracy,
+recorded 699 prompt tokens, and validated the final artifacts. The two-GPU
+serving entry point also answered its model-discovery and chat-completions HTTP
+requests before shutting down cleanly. The full 14,042-question baseline and
+any quantized comparison remain unmeasured.
