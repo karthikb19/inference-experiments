@@ -6,7 +6,9 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
     "huggingface-hub>=0.30.0",
+    "pyarrow>=25.0.1,<26",
     "transformers>=4.51.0",
+    "vllm>=0.29.0,<0.30",
 ]
 
 [dependency-groups]
