@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Date** | 2026-09-11 |
-| **Status** | Proposed |
+| **Status** | Accepted |
 | **Author** | Codex session |
 | **Touches** | `src/inference_experiments/wikitext/`, `tests/wikitext/`, `pyproject.toml`, `README.md`, `knowledge/runbooks/` |
 | **Invariants** | none |
@@ -24,6 +24,33 @@
 > Just the general schemas/commonw ays to evaluate it will suffice, we have a lot of primitives from mmlu that we can define
 >
 > think abt edgecases too btw, okay?
+
+> To clarify,
+>
+> Use a 4,096-token scoring window and a 512-token stride. The engine limit is at least 4,097 because vLLM 0.29.0 requires one generated token when using LLM.generate; that generated token is an implementation artifact and is never scored. The first window scores positions 1:4096. Every later window carries as much left context as fits and scores only its new suffix, up to 512 tokens. The final short suffix is included.
+> > we first start from 1, 4096 -> 512, 4096+512, .... correct?
+>
+> ===
+> as for the questions
+> 1. yes, agree lets follow hugging face orotocl here
+> 2. yes, i agree with you
+> 3. asked thsi question earlier
+> 4. yes, we only wnat to use the promptlog probs, we don't necessairly care about the token that we are at in that particular moment
+> 5. YES! its not that much data! we can store!
+> 6. yes, lets use mean nll!
+> 7. yes
+> 8. yes, we discussed this with mmlu
+>
+> @dataclass(frozen=True)
+> class PerplexityMetrics:
+>     corpus_tokens: int
+>     scored_tokens: int
+>     total_nll: float
+>     mean_nll: float
+>     perplexity: float
+>     bits_per_token: float
+>
+> ^ can you quikcly explain what bits_per_token means? and what do the other tokens mean/I agree with the long term metrics tho just an fyi - just asking about this
 
 ## Context
 
@@ -87,7 +114,7 @@ perplexity as its conventional transform.
 
 ### Evaluation protocol
 
-The proposed named protocol is
+The accepted named protocol is
 `wikitext-103-raw-qwen-token-ppl-sliding-v1`:
 
 1. Read parquet shards in lexical filename order and rows in stored order.
@@ -106,6 +133,12 @@ The proposed named protocol is
    never scored. The first window scores positions `1:4096`. Every later
    window carries as much left context as fits and scores only its new suffix,
    up to 512 tokens. The final short suffix is included.
+
+   Using half-open ranges, the first prompt is `[0, 4096)` and scores
+   `[1, 4096)`. The second prompt shifts by 512 to `[512, 4608)` but scores only
+   `[4096, 4608)`; its first 3,584 tokens are context. The third prompt is
+   `[1024, 5120)` and scores `[4608, 5120)`. This continues without scoring an
+   overlap twice or leaving a gap.
 5. Submit token IDs, not text, through one in-process batched engine with
    `SamplingParams(prompt_logprobs=0, max_tokens=1, temperature=0.0)`. vLLM
    returns the actual prompt token's log-probability even when zero alternative
@@ -226,6 +259,25 @@ class PerplexityComparison:
     perplexity_ratio: float
 ```
 
+The metric fields have the following meanings:
+
+- `corpus_tokens` is the number of Qwen tokenizer tokens in the rendered
+  corpus: 299,078 for the complete test split under this protocol.
+- `scored_tokens` is the number with a defined preceding context. It is
+  299,077 because the very first corpus token cannot be predicted from an
+  earlier corpus token.
+- `total_nll` is the sum of `-log(probability)` for all scored ground-truth
+  tokens, using natural logarithms. Lower is better, but the value grows with
+  corpus size.
+- `mean_nll` divides `total_nll` by `scored_tokens`. It is the primary,
+  corpus-length-normalized comparison; lower is better.
+- `perplexity` is `exp(mean_nll)`. It is the conventional language-model
+  presentation of the same result; lower is better.
+- `bits_per_token` is `mean_nll / log(2)`, equivalently
+  `log2(perplexity)`. It expresses average model surprise as idealized coding
+  bits per Qwen token. It does not describe the token IDs' storage size and is
+  not bits per byte or character. Lower is better.
+
 The eventual comparison primitive accepts two completed manifests plus their
 scores and returns `mean_nll_delta = quantized - bf16`,
 `perplexity_delta = quantized - bf16`, `perplexity_ratio = quantized / bf16`,
@@ -342,7 +394,10 @@ avoids heuristic article parsing, and freezes all otherwise ambiguous
 whitespace. If the other branch: define document boundaries and boundary tokens
 precisely, reset context at each boundary, and use a different protocol name.
 
-> **Samarth:**
+> **Samarth:** yes, agree lets follow hugging face orotocl here
+
+> **Resolution:** Agree. Preserve exact raw-row concatenation, use validation
+> for smoke tests, and reserve complete test runs for headline results.
 
 **Q2. Should the Qwen3-8B BF16 tokenizer with no BOS/EOS or chat template be
 frozen for both BF16 and quantized runs?**
@@ -350,7 +405,10 @@ Recommendation: agree. Quantization changes weights/runtime representation, not
 the units being predicted. If the other branch: results become separate
 absolute benchmarks and the comparator must refuse a paired perplexity delta.
 
-> **Samarth:**
+> **Samarth:** yes, i agree with you
+
+> **Resolution:** Agree. Freeze the BF16 tokenizer and omit BOS, EOS and chat
+> templating for every comparable run.
 
 **Q3. Should the first protocol use a 4,096-token window and 512-token stride?**
 Recommendation: agree. It supplies at least 3,584 prior tokens for later target
@@ -359,7 +417,10 @@ the available two-GPU setup. If the other branch: choose and freeze another pair
 before the BF16 baseline; changing either later creates a new protocol and
 requires rerunning every model.
 
-> **Samarth:**
+> **Samarth:** asked thsi question earlier
+
+> **Resolution:** Agree after clarifying half-open ranges. Prompt windows shift
+> by 512 tokens, while only the non-overlapping suffix is scored each time.
 
 **Q4. Should vLLM prompt log-probabilities be the scoring backend, with the one
 required generated token explicitly ignored?**
@@ -369,7 +430,11 @@ retains strict response validation. If the other branch: use a direct
 Transformers forward-loss implementation, which is simpler for masking but
 does not validate the inference runtime intended for quantized models.
 
-> **Samarth:**
+> **Samarth:** yes, we only wnat to use the promptlog probs, we don't
+> necessairly care about the token that we are at in that particular moment
+
+> **Resolution:** Agree. Use prompt log-probabilities for the observed
+> ground-truth corpus tokens. Ignore the one generated decode token completely.
 
 **Q5. Should every target-token log-probability be retained in ordered window
 artifacts?**
@@ -378,7 +443,9 @@ make local quantization regressions, malformed responses and aggregation
 reproducible. If the other branch: retain only window sums, reducing artifact
 size while giving up token-level paired diagnosis.
 
-> **Samarth:**
+> **Samarth:** YES! its not that much data! we can store!
+
+> **Resolution:** Agree. Retain every target token ID and log-probability.
 
 **Q6. Should mean NLL delta be the primary quantization comparison, with
 perplexity delta and ratio reported alongside it?**
@@ -387,7 +454,10 @@ perplexity ratio, while raw perplexity differences can look disproportionate.
 If the other branch: make perplexity delta primary but still retain NLL so the
 comparison remains mathematically auditable.
 
-> **Samarth:**
+> **Samarth:** yes, lets use mean nll!
+
+> **Resolution:** Agree. Mean NLL is primary; perplexity delta and ratio remain
+> conventional derived views.
 
 **Q7. Should successful runs finalize atomically while failed runs retain
 ordered partial scores, with resume deferred?**
@@ -397,7 +467,10 @@ If the other branch: add window-level checkpointing, fsync boundaries,
 configuration/token-plan fingerprint verification, duplicate rejection and
 exact continuation from the first missing target before finalization.
 
-> **Samarth:**
+> **Samarth:** yes
+
+> **Resolution:** Agree. Finalize only complete runs, retain visible partial
+> failures, and defer resume support.
 
 **Q8. Should stable evaluation artifacts remain separate from volatile timing
 and hardware provenance?**
@@ -405,7 +478,10 @@ Recommendation: agree. This carries forward the MMLU comparison contract and
 keeps performance noise out of quality review. If the other branch: whole-run
 artifacts cannot be compared without parsing and normalizing volatile fields.
 
-> **Samarth:**
+> **Samarth:** yes, we discussed this with mmlu
+
+> **Resolution:** Agree, consistent with the MMLU artifact contract. Keep
+> deterministic quality outputs separate from runtime and hardware data.
 
 ## Alternatives
 
@@ -454,5 +530,7 @@ within an explicit tolerance; exact equality is not expected across kernels.
 
 ## Outcome
 
-Pending answers to Q1–Q8. No evaluator or BF16/quantized benchmark run has been
-implemented by this ADR.
+Q1–Q8 were accepted on 2026-09-11. The clarification for Q3 records the exact
+half-open prompt and target ranges, and the clarification for Q4 distinguishes
+the ground-truth prompt-token log-probabilities from vLLM's ignored generated
+token. No evaluator or BF16/quantized benchmark run has yet been implemented.
