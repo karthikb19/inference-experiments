@@ -3,9 +3,9 @@
 | | |
 |---|---|
 | **Date** | 2026-09-11 |
-| **Status** | Accepted |
+| **Status** | Implemented |
 | **Author** | Codex session |
-| **Touches** | `src/inference_experiments/wikitext/`, `tests/wikitext/`, `pyproject.toml`, `README.md`, `knowledge/runbooks/` |
+| **Touches** | `src/inference_experiments/wikitext/`, `tests/wikitext/`, `pyproject.toml`, `README.md`, `knowledge/runbooks/`, `knowledge/reports/` |
 | **Invariants** | none |
 | **CONTEXT** | Extends `knowledge/decisions/2026-09-10-reproducible-vllm-mmlu-baselines.md` |
 
@@ -97,8 +97,8 @@ special tokens produces 299,078 test tokens and 262,337 validation tokens. The
 test corpus text SHA-256 is
 `696cca6b65a171b0a358a4be6732cdfdf2dd6164a32e20fd70e3c13fc4dfae83`.
 Qwen's tokenizer does not add a BOS token, so the first corpus token has no
-modelled predecessor and is excluded. Qwen3-8B BF16 test perplexity and its
-change under quantization are currently **UNMEASURED**.
+modelled predecessor and is excluded. Before implementation, Qwen3-8B BF16 test
+perplexity and its change under quantization were **UNMEASURED**.
 
 ## Decision
 
@@ -359,8 +359,8 @@ should use the same software and hardware environment whenever practical.
   a small perplexity change is user-visible.
 - **Non-promises** — batching throughput is not serving latency. The 4,096/512
   policy is a named compute/quality tradeoff, not Qwen's maximum possible
-  context. Full BF16 and quantized values remain **UNPROVEN** until GPU runs are
-  implemented and completed.
+  context. The quantized value remains **UNPROVEN** until a quantized checkpoint
+  is evaluated.
 
 ### Interfaces
 
@@ -533,7 +533,19 @@ within an explicit tolerance; exact equality is not expected across kernels.
 
 ## Outcome
 
-Q1–Q8 were accepted on 2026-09-11. The clarification for Q3 records the exact
-half-open prompt and target ranges, and the clarification for Q4 distinguishes
-the ground-truth prompt-token log-probabilities from vLLM's ignored generated
-token. No evaluator or BF16/quantized benchmark run has yet been implemented.
+Q1–Q8 were accepted on 2026-09-11. The evaluator landed in
+`src/inference_experiments/wikitext/` with strict parquet/token-plan validation,
+Hugging Face-style window planning, in-process vLLM prompt scoring, retained
+target log probabilities, token-weighted metrics, atomic artifacts, paired-run
+comparison gates, two console commands, and an operator runbook. The offline
+suite has 57 passing tests.
+
+A nine-window live smoke scored 8,191 validation targets, and a separate
+Transformers forward pass agreed with the vLLM observed-token log probabilities
+within a recorded maximum absolute tolerance of 0.1. The complete two-GPU BF16
+test run scored all 299,077 eligible targets across 578 windows: mean NLL
+`2.113317981`, perplexity `8.275654244`, and bits/token `3.048873371`. The
+completed-run loader independently reconstructed those metrics from the saved
+7.5 MB score artifact. Full provenance and runtime measurements are in
+`knowledge/reports/qwen3-8b-bf16-wikitext-perplexity.md`. Quantized perplexity
+and paired deltas remain **UNMEASURED** pending a quantized checkpoint.
