@@ -127,7 +127,9 @@ The accepted named protocol is
    `add_special_tokens=False`. Persist hashes of the rendered UTF-8 bytes,
    tokenizer files and ordered token IDs. Quantized evaluation reuses these
    token IDs rather than retokenizing with checkpoint-local defaults.
-4. Use a 4,096-token scoring window and a 512-token stride. The engine limit is
+4. Use a 4,096-token scoring window and a 512-token stride. Require the stride
+   to be shorter than the window so every later target has preceding context.
+   The engine limit is
    at least 4,097 because vLLM 0.29.0 requires one generated token when using
    `LLM.generate`; that generated token is an implementation artifact and is
    never scored. The first window scores positions `1:4096`. Every later
@@ -292,8 +294,9 @@ Follow the MMLU partial-directory lifecycle and separate stable evaluation data
 from volatile runtime data:
 
 - `config.json` — protocol, dataset revision/split and hashes, checkpoint hash,
-  tokenizer hash, dtype/quantization, context/stride, engine limit, batch and
-  tensor-parallel settings, token limit, seed, and Git commit.
+  tokenizer and evaluator-source hashes, dtype/quantization, context/stride,
+  engine limit, batch and tensor-parallel settings, token limit, seed, and Git
+  commit.
 - `corpus.json` — row count, UTF-8 byte count, corpus/scored-token counts and
   corpus/token-ID hashes. Token IDs need not be duplicated when their hash and
   deterministic construction are recorded.

@@ -94,3 +94,50 @@ aggregate metrics. Generated artifacts and model checkpoints are not committed.
 
 To compare a quantized checkpoint, change `--model` and give it a distinct
 output directory while keeping the remaining evaluation options identical.
+
+## Run WikiText-103 perplexity
+
+The WikiText evaluator uses the accepted Hugging Face-style strided-window
+protocol with in-process vLLM prompt log probabilities. It defaults to a
+4,096-token context, 512-token stride, and two GPUs. Start with a bounded smoke
+run:
+
+```bash
+uv run wikitext-perplexity \
+  --output-dir artifacts/wikitext/qwen3-8b-bf16-smoke \
+  --split validation \
+  --limit-tokens 8192
+```
+
+Run the complete 299,077-target test baseline with:
+
+```bash
+uv run wikitext-perplexity \
+  --output-dir artifacts/wikitext/qwen3-8b-bf16
+```
+
+Every target token ID and prompt log probability is retained in
+`scores.jsonl`. Aggregate mean NLL, perplexity, and bits per token are written
+to `metrics.json`; volatile timings and environment details stay in
+`runtime.json`. Failed runs remain under `<output>.partial` without aggregate
+metrics.
+
+Quantized runs must keep the BF16 tokenizer and every evaluation option fixed:
+
+```bash
+uv run wikitext-perplexity \
+  --model models/Qwen3-8B-quantized \
+  --tokenizer models/Qwen3-8B \
+  --quantization compressed-tensors \
+  --output-dir artifacts/wikitext/qwen3-8b-quantized
+
+uv run wikitext-perplexity-compare \
+  --baseline-dir artifacts/wikitext/qwen3-8b-bf16 \
+  --candidate-dir artifacts/wikitext/qwen3-8b-quantized \
+  --output artifacts/wikitext/bf16-vs-quantized.json
+```
+
+The comparison command refuses different corpus, tokenizer, token-plan,
+context, stride, split, or scored-token contracts. See the
+[WikiText perplexity runbook](knowledge/runbooks/wikitext-perplexity.md) for
+metric interpretation, validation, and troubleshooting.
