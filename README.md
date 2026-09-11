@@ -28,8 +28,9 @@ Run Python and GPU commands inside gdevbox:
 module load apptainer
 gdevbox
 cd ~/inference-experiments
-source .venv/bin/activate
+export PATH="/root/.local/bin:$PATH"
 uv sync
+source .venv/bin/activate
 ```
 
 If the venv Python points to a host `/sw/...` path that is unavailable inside
@@ -61,6 +62,8 @@ uv run serve-qwen3-8b --port 8030 --max-model-len 8192
 
 The evaluator runs vLLM directly in the Python process, uses the original
 five-shot MMLU prompt and A-D probability scoring, and defaults to two GPUs.
+See the [MMLU baseline runbook](knowledge/runbooks/mmlu-baseline.md) for complete
+gdevbox setup, validation, artifact inspection, and troubleshooting guidance.
 Start with an explicitly named smoke artifact:
 
 ```bash
