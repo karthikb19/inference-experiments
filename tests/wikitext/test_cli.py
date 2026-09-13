@@ -25,3 +25,11 @@ def test_parse_config_accepts_fake_quantization() -> None:
     )
 
     assert config.quantization == "int8-fake-quant"
+
+
+def test_parse_config_accepts_int4_fake_quantization() -> None:
+    config = parse_config(
+        ["--output-dir", "artifacts/test-run", "--quantization", "int4-fake-quant"]
+    )
+
+    assert config.quantization == "int4-fake-quant"

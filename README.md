@@ -95,14 +95,19 @@ aggregate metrics. Generated artifacts and model checkpoints are not committed.
 To compare a quantized checkpoint, change `--model` and give it a distinct
 output directory while keeping the remaining evaluation options identical.
 
-## Run the INT8 fake-quant experiment
+## Run the INT4 or INT8 fake-quant experiment
 
-The `int8-fake-quant` vLLM plugin loads the ordinary BF16 checkpoint, rounds
-every vLLM linear weight row through symmetric signed INT8 with one FP32 scale
-per output channel, stores the reconstructed values as BF16, and then uses the
-ordinary BF16 matrix multiplication. It does not quantize activations,
+The `int4-fake-quant` and `int8-fake-quant` vLLM plugins load the ordinary BF16
+checkpoint, round every vLLM linear weight row through symmetric signed INT4 or
+INT8 with one FP32 scale per output channel, store the reconstructed values as
+BF16, and then use ordinary BF16 matrix multiplication. INT4 uses levels −7…7;
+it is simulated with `torch.int8` values and does not pack weights. Neither
+plugin quantizes activations,
 embeddings, attention kernels, the KV cache, or the vocabulary head. Attention
 QKV and output projections are included because they are linear layers.
+Both evaluators explicitly pass `kv_cache_dtype=auto` to vLLM, so the KV cache
+uses the runtime's normal unquantized dtype and is independent of the INT4
+weight round trip.
 
 Run paired MMLU and WikiText candidates without creating another checkpoint:
 
@@ -129,6 +134,14 @@ useful:
 ```bash
 uv run serve-qwen3-8b --quantization int8-fake-quant
 ```
+
+Use `int4-fake-quant` in the same commands when testing the four-bit variant.
+
+The full INT4 variant-0 run scored 65.33% on MMLU (9,173/14,042) and 10.7121
+perplexity on WikiText. Compared with BF16, this was a 9.48 percentage-point
+MMLU decrease and a perplexity increase from 8.2757 to 10.7121. The KV cache
+was unchanged and unquantized (`kv_cache_dtype=auto`). Results are recorded in
+the [INT4 fake-quantization ADR](knowledge/decisions/2026-09-13-vllm-int4-linear-fake-quantization.md).
 
 ## Run WikiText-103 perplexity
 
