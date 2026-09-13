@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import TYPE_CHECKING
 
 import torch
@@ -18,8 +19,16 @@ from vllm.model_executor.layers.quantization.base_config import QuantizationConf
 if TYPE_CHECKING:
     from vllm.model_executor.layers.quantization import QuantizationMethods
 
-FAKE_QUANTIZATION = "int8-fake-quant"
-INT4_FAKE_QUANTIZATION = "int4-fake-quant"
+
+class FakeQuantization(StrEnum):
+    """Registered fake-quantization methods exposed by the plugin."""
+
+    INT_8_FAKE_QUANT = "int8-fake-quant"
+    INT_4_FAKE_QUANT = "int4-fake-quant"
+
+
+FAKE_QUANTIZATION = FakeQuantization.INT_8_FAKE_QUANT.value
+INT4_FAKE_QUANTIZATION = FakeQuantization.INT_4_FAKE_QUANT.value
 INT8_MAX = 127
 INT4_MAX = 7
 

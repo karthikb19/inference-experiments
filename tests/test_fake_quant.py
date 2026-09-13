@@ -6,9 +6,15 @@ import torch
 from inference_experiments.fake_quant import (
     INT4_MAX,
     INT8_MAX,
+    FakeQuantization,
     fake_quantize_rows,
     int4_fake_quantize_rows,
 )
+
+
+def test_fake_quantization_enum_uses_vllm_method_names() -> None:
+    assert FakeQuantization.INT_8_FAKE_QUANT.value == "int8-fake-quant"
+    assert FakeQuantization.INT_4_FAKE_QUANT.value == "int4-fake-quant"
 
 
 def test_int4_fake_quantize_rows_uses_signed_four_bit_levels() -> None:

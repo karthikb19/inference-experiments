@@ -137,6 +137,12 @@ uv run serve-qwen3-8b --quantization int8-fake-quant
 
 Use `int4-fake-quant` in the same commands when testing the four-bit variant.
 
+The full INT4 variant-0 run scored 65.33% on MMLU (9,173/14,042) and 10.7121
+perplexity on WikiText. Compared with BF16, this was a 9.48 percentage-point
+MMLU decrease and a perplexity increase from 8.2757 to 10.7121. The KV cache
+was unchanged and unquantized (`kv_cache_dtype=auto`). Results are recorded in
+the [INT4 fake-quantization ADR](knowledge/decisions/2026-09-13-vllm-int4-linear-fake-quantization.md).
+
 ## Run WikiText-103 perplexity
 
 The WikiText evaluator uses the accepted Hugging Face-style strided-window

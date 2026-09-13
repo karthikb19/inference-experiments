@@ -2,9 +2,10 @@
 
 ## Context
 
-The repository has an INT8 per-output-channel fake-quantization plugin for
-evaluating BF16 Qwen3-8B linear layers without creating a quantized checkpoint.
-We need the matching four-bit experiment, and benchmark execution is deferred.
+The repository has per-output-channel INT8 and INT4 fake-quantization plugins
+for evaluating BF16 Qwen3-8B linear layers without creating a quantized
+checkpoint. The matching four-bit benchmark has now been run on the current
+branch.
 
 ## Decision
 
@@ -26,9 +27,29 @@ the plugin cannot silently quantize the KV cache.
 
 The INT4 path is directly comparable with the INT8 path and requires no model
 conversion. It does not measure packed-weight memory savings or INT4 kernel
-throughput.
+throughput. The two plugin names are represented by the typed
+`FakeQuantization` enum (`INT_8_FAKE_QUANT` and `INT_4_FAKE_QUANT`) while their
+vLLM-facing values remain `int8-fake-quant` and `int4-fake-quant`.
 
 ## Surface Areas
 
-The plugin module, offline unit tests, CLI/serving documentation, and this ADR
-are updated. No MMLU or WikiText run is started by this change.
+The plugin module, offline unit tests, CLI/serving documentation, benchmark
+artifacts, and this ADR are updated.
+
+## Outcome
+
+The full INT4 variant-0 runs completed on two RTX 4000 Ada GPUs with
+`kv_cache_dtype=auto`, so the KV cache remained in its normal runtime dtype.
+MMLU scored 9,173 of 14,042 questions correctly, or 65.33% weighted accuracy.
+The matched BF16 baseline scored 74.8113% and the INT8 fake-quant run scored
+74.8825%, putting INT4 9.48 percentage points below BF16 and 9.55 points below
+INT8.
+
+WikiText scored all 299,077 eligible tokens. Mean NLL was 2.371375,
+perplexity was 10.712106, and bits per token was 3.421170. Relative to the
+BF16 perplexity of 8.275654, INT4 increased mean NLL by 0.258057 and had a
+perplexity ratio of approximately 1.294.
+
+Artifacts are stored under
+`artifacts/mmlu/qwen3-8b-int4-fake-quant-variant0` and
+`artifacts/wikitext/qwen3-8b-int4-fake-quant-variant0`.
