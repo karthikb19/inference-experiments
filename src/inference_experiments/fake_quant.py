@@ -1,4 +1,4 @@
-"""vLLM plugin for symmetric per-channel INT8 weight fake quantization."""
+"""vLLM plugins for symmetric per-channel INT4 and INT8 fake quantization."""
 
 from __future__ import annotations
 
@@ -19,13 +19,31 @@ if TYPE_CHECKING:
     from vllm.model_executor.layers.quantization import QuantizationMethods
 
 FAKE_QUANTIZATION = "int8-fake-quant"
+INT4_FAKE_QUANTIZATION = "int4-fake-quant"
 INT8_MAX = 127
+INT4_MAX = 7
 
 
 def fake_quantize_rows(
     weight: torch.Tensor, *, row_absmax: torch.Tensor | None = None
 ) -> torch.Tensor:
     """Quantize each output row to INT8 and dequantize to the input dtype."""
+    return _fake_quantize_rows(weight, row_absmax=row_absmax, quantization_max=INT8_MAX)
+
+
+def int4_fake_quantize_rows(
+    weight: torch.Tensor, *, row_absmax: torch.Tensor | None = None
+) -> torch.Tensor:
+    """Quantize each output row to signed INT4 and dequantize to the input dtype."""
+    return _fake_quantize_rows(weight, row_absmax=row_absmax, quantization_max=INT4_MAX)
+
+
+def _fake_quantize_rows(
+    weight: torch.Tensor,
+    *,
+    row_absmax: torch.Tensor | None,
+    quantization_max: int,
+) -> torch.Tensor:
     if weight.ndim != 2 or weight.shape[0] == 0 or weight.shape[1] == 0:
         raise ValueError("weight must be a non-empty two-dimensional tensor")
     if not weight.is_floating_point():
@@ -39,20 +57,23 @@ def fake_quantize_rows(
     if not torch.isfinite(row_absmax).all() or (row_absmax < 0).any():
         raise ValueError("row_absmax values must be finite and non-negative")
 
-    scales = row_absmax.float() / INT8_MAX
+    scales = row_absmax.float() / quantization_max
     safe_scales = torch.where(scales == 0, torch.ones_like(scales), scales)
     quantized = (
         torch.round(float_weight / safe_scales[:, None])
-        .clamp(-INT8_MAX, INT8_MAX)
+        .clamp(-quantization_max, quantization_max)
         .to(torch.int8)
     )
     return (quantized.float() * safe_scales[:, None]).to(weight.dtype)
 
 
-class Int8FakeQuantLinearMethod(LinearMethodBase):
+class _FakeQuantLinearMethod(LinearMethodBase):
     """Load BF16 weights, fake-quantize them once, and use BF16 GEMM."""
 
-    def __init__(self) -> None:
+    quantization_max: int
+
+    def __init__(self, quantization_max: int) -> None:
+        self.quantization_max = quantization_max
         self._unquantized = UnquantizedLinearMethod()
 
     def create_weights(
@@ -67,7 +88,7 @@ class Int8FakeQuantLinearMethod(LinearMethodBase):
     ) -> None:
         """Create the ordinary BF16 weight expected by checkpoint loaders."""
         if params_dtype != torch.bfloat16:
-            raise ValueError("int8-fake-quant requires BF16 model weights")
+            raise ValueError("fake quantization requires BF16 model weights")
         self._unquantized.create_weights(
             layer,
             input_size_per_partition,
@@ -79,7 +100,7 @@ class Int8FakeQuantLinearMethod(LinearMethodBase):
         )
 
     def process_weights_after_loading(self, layer: torch.nn.Module) -> None:
-        """Replace loaded weights with their per-row INT8 round-trip values."""
+        """Replace loaded weights with their per-row quantized round-trip values."""
         weight = getattr(layer, "weight", None)
         if not isinstance(weight, torch.nn.Parameter):
             raise TypeError("fake-quantized linear layer has no weight parameter")
@@ -92,7 +113,13 @@ class Int8FakeQuantLinearMethod(LinearMethodBase):
                 group=get_tp_group().device_group,
             )
         with torch.no_grad():
-            weight.copy_(fake_quantize_rows(weight, row_absmax=row_absmax))
+            weight.copy_(
+                _fake_quantize_rows(
+                    weight,
+                    row_absmax=row_absmax,
+                    quantization_max=self.quantization_max,
+                )
+            )
         self._unquantized.process_weights_after_loading(layer)
 
     def apply(
@@ -105,8 +132,7 @@ class Int8FakeQuantLinearMethod(LinearMethodBase):
         return self._unquantized.apply(layer, x, bias)
 
 
-@register_quantization_config(FAKE_QUANTIZATION)
-class Int8FakeQuantConfig(QuantizationConfig):
+class _FakeQuantConfig(QuantizationConfig):
     """Apply weight-only fake quantization to every vLLM linear layer."""
 
     @classmethod
@@ -126,7 +152,7 @@ class Int8FakeQuantConfig(QuantizationConfig):
         return []
 
     @classmethod
-    def from_config(cls, config: dict[str, object]) -> Int8FakeQuantConfig:
+    def from_config(cls, config: dict[str, object]) -> _FakeQuantConfig:
         return cls()
 
     def get_quant_method(
@@ -134,8 +160,38 @@ class Int8FakeQuantConfig(QuantizationConfig):
     ) -> LinearMethodBase | None:
         del prefix
         if isinstance(layer, LinearBase):
-            return Int8FakeQuantLinearMethod()
+            return self.linear_method()
         return None
+
+    @classmethod
+    def linear_method(cls) -> LinearMethodBase:
+        raise NotImplementedError
+
+
+@register_quantization_config(FAKE_QUANTIZATION)
+class Int8FakeQuantConfig(_FakeQuantConfig):
+    """Apply weight-only fake quantization to every vLLM linear layer."""
+
+    @classmethod
+    def get_name(cls) -> QuantizationMethods:
+        return FAKE_QUANTIZATION
+
+    @classmethod
+    def linear_method(cls) -> LinearMethodBase:
+        return _FakeQuantLinearMethod(INT8_MAX)
+
+
+@register_quantization_config(INT4_FAKE_QUANTIZATION)
+class Int4FakeQuantConfig(_FakeQuantConfig):
+    """Apply signed INT4 weight-only fake quantization to every linear layer."""
+
+    @classmethod
+    def get_name(cls) -> QuantizationMethods:
+        return INT4_FAKE_QUANTIZATION
+
+    @classmethod
+    def linear_method(cls) -> LinearMethodBase:
+        return _FakeQuantLinearMethod(INT4_MAX)
 
 
 def register_plugin() -> None:

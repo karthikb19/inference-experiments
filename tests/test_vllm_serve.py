@@ -22,3 +22,9 @@ def test_build_serve_command_includes_fake_quantization() -> None:
     command = build_serve_command(ServeConfig(quantization="int8-fake-quant"))
 
     assert command[-2:] == ("--quantization", "int8-fake-quant")
+
+
+def test_build_serve_command_includes_int4_fake_quantization() -> None:
+    command = build_serve_command(ServeConfig(quantization="int4-fake-quant"))
+
+    assert command[-2:] == ("--quantization", "int4-fake-quant")

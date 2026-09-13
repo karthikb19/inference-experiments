@@ -95,12 +95,14 @@ aggregate metrics. Generated artifacts and model checkpoints are not committed.
 To compare a quantized checkpoint, change `--model` and give it a distinct
 output directory while keeping the remaining evaluation options identical.
 
-## Run the INT8 fake-quant experiment
+## Run the INT4 or INT8 fake-quant experiment
 
-The `int8-fake-quant` vLLM plugin loads the ordinary BF16 checkpoint, rounds
-every vLLM linear weight row through symmetric signed INT8 with one FP32 scale
-per output channel, stores the reconstructed values as BF16, and then uses the
-ordinary BF16 matrix multiplication. It does not quantize activations,
+The `int4-fake-quant` and `int8-fake-quant` vLLM plugins load the ordinary BF16
+checkpoint, round every vLLM linear weight row through symmetric signed INT4 or
+INT8 with one FP32 scale per output channel, store the reconstructed values as
+BF16, and then use ordinary BF16 matrix multiplication. INT4 uses levels −7…7;
+it is simulated with `torch.int8` values and does not pack weights. Neither
+plugin quantizes activations,
 embeddings, attention kernels, the KV cache, or the vocabulary head. Attention
 QKV and output projections are included because they are linear layers.
 
@@ -129,6 +131,8 @@ useful:
 ```bash
 uv run serve-qwen3-8b --quantization int8-fake-quant
 ```
+
+Use `int4-fake-quant` in the same commands when testing the four-bit variant.
 
 ## Run WikiText-103 perplexity
 
