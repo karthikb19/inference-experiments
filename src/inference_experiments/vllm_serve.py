@@ -18,6 +18,7 @@ class ServeConfig:
     tensor_parallel_size: int = 2
     max_model_len: int = 4096
     gpu_memory_utilization: float = 0.9
+    quantization: str | None = None
     host: str = "127.0.0.1"
     port: int = 8000
 
@@ -28,13 +29,15 @@ class ServeConfig:
             raise ValueError("max_model_len must be positive")
         if not 0 < self.gpu_memory_utilization <= 1:
             raise ValueError("gpu_memory_utilization must be in (0, 1]")
+        if self.quantization is not None and not self.quantization.strip():
+            raise ValueError("quantization must be non-empty when provided")
         if self.port not in range(1, 65536):
             raise ValueError("port must be between 1 and 65535")
 
 
 def build_serve_command(config: ServeConfig) -> tuple[str, ...]:
     """Build the explicit vLLM server command."""
-    return (
+    command = (
         "vllm",
         "serve",
         str(config.model),
@@ -51,6 +54,9 @@ def build_serve_command(config: ServeConfig) -> tuple[str, ...]:
         "--port",
         str(config.port),
     )
+    if config.quantization is not None:
+        command += ("--quantization", config.quantization)
+    return command
 
 
 def parse_config(arguments: Sequence[str] | None = None) -> ServeConfig:
@@ -61,6 +67,7 @@ def parse_config(arguments: Sequence[str] | None = None) -> ServeConfig:
     parser.add_argument("--tensor-parallel-size", type=int, default=2)
     parser.add_argument("--max-model-len", type=int, default=4096)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
+    parser.add_argument("--quantization")
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
     options = parser.parse_args(arguments)
@@ -70,6 +77,7 @@ def parse_config(arguments: Sequence[str] | None = None) -> ServeConfig:
         tensor_parallel_size=options.tensor_parallel_size,
         max_model_len=options.max_model_len,
         gpu_memory_utilization=options.gpu_memory_utilization,
+        quantization=options.quantization,
         host=options.host,
         port=options.port,
     )

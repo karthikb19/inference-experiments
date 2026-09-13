@@ -10,3 +10,16 @@ def test_parse_config_defaults_to_two_gpu_test_evaluation() -> None:
     assert config.split == "test"
     assert config.batch_size == 64
     assert config.subjects == ()
+
+
+def test_parse_config_accepts_fake_quantization() -> None:
+    config = parse_config(
+        [
+            "--output-dir",
+            "artifacts/test-run",
+            "--quantization",
+            "int8-fake-quant",
+        ]
+    )
+
+    assert config.quantization == "int8-fake-quant"

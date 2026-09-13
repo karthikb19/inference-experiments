@@ -95,6 +95,41 @@ aggregate metrics. Generated artifacts and model checkpoints are not committed.
 To compare a quantized checkpoint, change `--model` and give it a distinct
 output directory while keeping the remaining evaluation options identical.
 
+## Run the INT8 fake-quant experiment
+
+The `int8-fake-quant` vLLM plugin loads the ordinary BF16 checkpoint, rounds
+every vLLM linear weight row through symmetric signed INT8 with one FP32 scale
+per output channel, stores the reconstructed values as BF16, and then uses the
+ordinary BF16 matrix multiplication. It does not quantize activations,
+embeddings, attention kernels, the KV cache, or the vocabulary head. Attention
+QKV and output projections are included because they are linear layers.
+
+Run paired MMLU and WikiText candidates without creating another checkpoint:
+
+```bash
+uv run mmlu-baseline \
+  --quantization int8-fake-quant \
+  --output-dir artifacts/mmlu/qwen3-8b-int8-fake-quant
+
+uv run wikitext-perplexity \
+  --quantization int8-fake-quant \
+  --output-dir artifacts/wikitext/qwen3-8b-int8-fake-quant
+```
+
+Keep all non-quantization options equal to the BF16 baseline. The fake-quant
+pass runs once after each tensor-parallel shard is loaded; doing the same
+deterministic round trip before every forward would produce the same BF16
+weights but would add repeated quantization overhead unrelated to quality.
+Row-parallel layers synchronize their maxima across tensor-parallel workers,
+so each scale represents a row of the original unsharded matrix.
+
+The serving wrapper accepts the same method when interactive inspection is
+useful:
+
+```bash
+uv run serve-qwen3-8b --quantization int8-fake-quant
+```
+
 ## Run WikiText-103 perplexity
 
 The WikiText evaluator uses the accepted Hugging Face-style strided-window

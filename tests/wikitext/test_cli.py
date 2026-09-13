@@ -12,3 +12,16 @@ def test_parse_config_defaults_to_accepted_two_gpu_protocol() -> None:
     assert config.max_model_len == 4097
     assert config.tensor_parallel_size == 2
     assert config.tokenizer == config.model
+
+
+def test_parse_config_accepts_fake_quantization() -> None:
+    config = parse_config(
+        [
+            "--output-dir",
+            "artifacts/wikitext/test-run",
+            "--quantization",
+            "int8-fake-quant",
+        ]
+    )
+
+    assert config.quantization == "int8-fake-quant"
