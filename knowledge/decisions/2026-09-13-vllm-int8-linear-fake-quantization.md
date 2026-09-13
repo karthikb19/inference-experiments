@@ -145,10 +145,33 @@ smoke test.
 
 The plugin, benchmark wiring, focused tests, and documentation landed together.
 The offline suite passed 68 tests. Live vLLM 0.29.0 validation loaded the local
-Qwen3-8B checkpoint through the plugin on two RTX 4000 Ada GPUs and completed a
-one-question MMLU run. A separate 16-token WikiText validation run scored all
-15 eligible targets with mean NLL 4.464568 and perplexity 86.883528. These are
-integration smokes, not quality estimates. Full paired MMLU and WikiText
-measurements remain unmeasured and should use the same BF16 checkpoint,
-tokenizer, dataset, and benchmark options with only
-`--quantization int8-fake-quant` changed.
+Qwen3-8B checkpoint through the plugin on two RTX 4000 Ada GPUs. Initial MMLU
+and WikiText integration smokes completed before the full evaluations.
+
+The full fake-quant MMLU run completed all 14,042 test questions with 10,515
+correct, 74.8825% weighted accuracy, 76.7664% subject-macro accuracy, and zero
+invalid predictions. The matched BF16 baseline had 10,505 correct and 74.8113%
+weighted accuracy, so the aggregate difference was +10 answers and +0.0712
+percentage points. Fake-quant evaluation took 242.08 seconds at 58.01 examples
+per second after 71.43 seconds of engine initialization. Its local artifacts
+are stored under `artifacts/mmlu/qwen3-8b-int8-fake-quant-full`.
+
+The full fake-quant WikiText run scored all 299,077 eligible tokens in 578
+windows. Mean NLL was 2.112195, perplexity was 8.266366, and bits per token was
+3.047253. The repository's paired comparison validator accepted the candidate
+and BF16 contracts and confirmed the same model hash. Relative to the BF16
+mean NLL of 2.113318 and perplexity of 8.275654, fake quantization changed mean
+NLL by -0.001123 and perplexity by -0.009289, for a perplexity ratio of
+0.998878. Scoring took 441.11 seconds at 678.01 scored tokens per second after
+100.43 seconds of engine initialization. Its local artifacts are stored under
+`artifacts/wikitext/qwen3-8b-int8-fake-quant-full`.
+
+These results establish that symmetric per-output-row INT8 rounding followed
+by BF16 reconstruction does not cause an aggregate quality regression for this
+checkpoint under the accepted MMLU and WikiText protocols. The tiny apparent
+improvements are treated as effectively neutral rather than evidence that
+quantization improves the model; repeated runs would be needed to characterize
+runtime-level variation. This result supports proceeding to a stored INT8
+checkpoint, but does not validate its serialization, scale layout, tensor-
+parallel loading, packing, INT8 kernels, memory use, or performance. Those are
+separate obligations for future changes.
