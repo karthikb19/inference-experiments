@@ -105,6 +105,9 @@ it is simulated with `torch.int8` values and does not pack weights. Neither
 plugin quantizes activations,
 embeddings, attention kernels, the KV cache, or the vocabulary head. Attention
 QKV and output projections are included because they are linear layers.
+Both evaluators explicitly pass `kv_cache_dtype=auto` to vLLM, so the KV cache
+uses the runtime's normal unquantized dtype and is independent of the INT4
+weight round trip.
 
 Run paired MMLU and WikiText candidates without creating another checkpoint:
 

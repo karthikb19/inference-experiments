@@ -12,6 +12,8 @@ Register `int4-fake-quant` alongside `int8-fake-quant`. Use symmetric signed
 INT4 levels from −7 through 7, reconstruct BF16 weights once after loading, and
 continue to use ordinary BF16 matrix multiplication. Simulated INT4 values are
 held in `torch.int8`; no packed INT4 kernel is introduced.
+Both evaluation engines explicitly set vLLM's `kv_cache_dtype` to `auto`, so
+the plugin cannot silently quantize the KV cache.
 
 ## Alternatives
 

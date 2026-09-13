@@ -79,6 +79,7 @@ class VLLMLikelihoodEngine:
             max_model_len=max_model_len,
             gpu_memory_utilization=gpu_memory_utilization,
             quantization=quantization,
+            kv_cache_dtype="auto",
             seed=seed,
         )
         self._runner: _Runner | None = cast(_Runner, runner)
