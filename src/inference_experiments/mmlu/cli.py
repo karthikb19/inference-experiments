@@ -22,6 +22,7 @@ def parse_config(arguments: Sequence[str] | None = None) -> EvaluationConfig:
     parser.add_argument("--max-model-len", type=int, default=4096)
     parser.add_argument("--batch-size", type=int, default=64)
     parser.add_argument("--gpu-memory-utilization", type=float, default=0.9)
+    parser.add_argument("--quantization")
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--limit", type=int)
     parser.add_argument("--subjects", nargs="*", default=())
@@ -35,6 +36,7 @@ def parse_config(arguments: Sequence[str] | None = None) -> EvaluationConfig:
         max_model_len=options.max_model_len,
         batch_size=options.batch_size,
         gpu_memory_utilization=options.gpu_memory_utilization,
+        quantization=options.quantization,
         seed=options.seed,
         limit=options.limit,
         subjects=tuple(options.subjects),
@@ -51,6 +53,7 @@ def main(arguments: Sequence[str] | None = None) -> int:
             tensor_parallel_size=config.tensor_parallel_size,
             max_model_len=config.max_model_len,
             gpu_memory_utilization=config.gpu_memory_utilization,
+            quantization=config.quantization,
             seed=config.seed,
         )
 

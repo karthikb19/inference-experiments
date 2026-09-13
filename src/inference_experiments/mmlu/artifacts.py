@@ -75,6 +75,7 @@ class ConfigJSON(TypedDict):
     max_model_len: int
     batch_size: int
     gpu_memory_utilization: float
+    quantization: str | None
     seed: int
     limit: int | None
     subjects: list[str]
@@ -134,6 +135,7 @@ def write_config(path: Path, config: EvaluationConfig, model_sha256: str) -> Non
         "max_model_len": config.max_model_len,
         "batch_size": config.batch_size,
         "gpu_memory_utilization": config.gpu_memory_utilization,
+        "quantization": config.quantization,
         "seed": config.seed,
         "limit": config.limit,
         "subjects": list(config.subjects),

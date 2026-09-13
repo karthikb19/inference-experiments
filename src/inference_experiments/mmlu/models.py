@@ -55,6 +55,7 @@ class EvaluationConfig:
     max_model_len: int = 4096
     batch_size: int = 64
     gpu_memory_utilization: float = 0.9
+    quantization: str | None = None
     seed: int = 0
     limit: int | None = None
     subjects: tuple[str, ...] = ()
@@ -69,6 +70,8 @@ class EvaluationConfig:
             raise ValueError("batch_size must be positive")
         if not 0 < self.gpu_memory_utilization <= 1:
             raise ValueError("gpu_memory_utilization must be in (0, 1]")
+        if self.quantization is not None and not self.quantization.strip():
+            raise ValueError("quantization must be non-empty when provided")
         if self.limit is not None and self.limit < 1:
             raise ValueError("limit must be positive when provided")
 

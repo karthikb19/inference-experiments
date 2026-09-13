@@ -67,6 +67,7 @@ class VLLMEngine:
         tensor_parallel_size: int,
         max_model_len: int,
         gpu_memory_utilization: float,
+        quantization: str | None,
         seed: int,
     ) -> None:
         from vllm import LLM, SamplingParams
@@ -76,6 +77,7 @@ class VLLMEngine:
             tensor_parallel_size=tensor_parallel_size,
             max_model_len=max_model_len,
             gpu_memory_utilization=gpu_memory_utilization,
+            quantization=quantization,
             seed=seed,
         )
         self._runner: _Runner | None = cast(_Runner, runner)
