@@ -148,6 +148,12 @@ MMLU decrease and a perplexity increase from 8.2757 to 10.7121. The KV cache
 was unchanged and unquantized (`kv_cache_dtype=auto`). Results are recorded in
 the [INT4 fake-quantization ADR](knowledge/decisions/2026-09-13-vllm-int4-linear-fake-quantization.md).
 
+The INT8 QKV coverage verification scored 74.84% on MMLU (10,509/14,042) and
+8.2664 perplexity on WikiText. Its current-source BF16 controls scored 74.81%
+and 8.2757 respectively. The implementation audit, strict paired perplexity
+comparison, artifact provenance, and interpretation are recorded in the
+[INT8 QKV coverage ADR](knowledge/decisions/2026-09-13-int8-qkv-projection-coverage.md).
+
 ## Run WikiText-103 perplexity
 
 The WikiText evaluator uses the accepted Hugging Face-style strided-window
