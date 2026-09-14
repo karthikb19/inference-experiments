@@ -102,9 +102,14 @@ checkpoint, round every vLLM linear weight row through symmetric signed INT4 or
 INT8 with one FP32 scale per output channel, store the reconstructed values as
 BF16, and then use ordinary BF16 matrix multiplication. INT4 uses levels −7…7;
 it is simulated with `torch.int8` values and does not pack weights. Neither
-plugin quantizes activations,
-embeddings, attention kernels, the KV cache, or the vocabulary head. Attention
-QKV and output projections are included because they are linear layers.
+plugin quantizes activations, embeddings, attention kernels, the KV cache, or
+the vocabulary head. Qwen's WQ, WK, and WV parameters are rows of vLLM's fused
+`QKVParallelLinear` weight, so each projection row receives its own scale and
+INT8 or INT4 round trip. The projected Q/K/V tensors are not quantized. The
+attention output projection is included because it is also a linear layer. The
+INT8 configuration fails model loading if a `.qkv_proj` module is no longer a
+recognized `QKVParallelLinear`, preventing a vLLM change from silently dropping
+WQ/WK/WV coverage.
 Both evaluators explicitly pass `kv_cache_dtype=auto` to vLLM, so the KV cache
 uses the runtime's normal unquantized dtype and is independent of the INT4
 weight round trip.
@@ -142,6 +147,12 @@ perplexity on WikiText. Compared with BF16, this was a 9.48 percentage-point
 MMLU decrease and a perplexity increase from 8.2757 to 10.7121. The KV cache
 was unchanged and unquantized (`kv_cache_dtype=auto`). Results are recorded in
 the [INT4 fake-quantization ADR](knowledge/decisions/2026-09-13-vllm-int4-linear-fake-quantization.md).
+
+The INT8 QKV coverage verification scored 74.84% on MMLU (10,509/14,042) and
+8.2664 perplexity on WikiText. Its current-source BF16 controls scored 74.81%
+and 8.2757 respectively. The implementation audit, strict paired perplexity
+comparison, artifact provenance, and interpretation are recorded in the
+[INT8 QKV coverage ADR](knowledge/decisions/2026-09-13-int8-qkv-projection-coverage.md).
 
 ## Run WikiText-103 perplexity
 

@@ -10,6 +10,7 @@ from vllm.distributed import get_tp_group
 from vllm.model_executor.layers.linear import (
     LinearBase,
     LinearMethodBase,
+    QKVParallelLinear,
     RowParallelLinear,
     UnquantizedLinearMethod,
 )
@@ -31,6 +32,7 @@ FAKE_QUANTIZATION = FakeQuantization.INT_8_FAKE_QUANT.value
 INT4_FAKE_QUANTIZATION = FakeQuantization.INT_4_FAKE_QUANT.value
 INT8_MAX = 127
 INT4_MAX = 7
+QKV_PROJECTION_SUFFIX = ".qkv_proj"
 
 
 def fake_quantize_rows(
@@ -179,11 +181,24 @@ class _FakeQuantConfig(QuantizationConfig):
 
 @register_quantization_config(FAKE_QUANTIZATION)
 class Int8FakeQuantConfig(_FakeQuantConfig):
-    """Apply weight-only fake quantization to every vLLM linear layer."""
+    """Apply weight-only fake quantization to linear and fused QKV weights."""
 
     @classmethod
     def get_name(cls) -> QuantizationMethods:
         return FAKE_QUANTIZATION
+
+    def get_quant_method(
+        self, layer: torch.nn.Module, prefix: str
+    ) -> LinearMethodBase | None:
+        """Select linear weights and reject an unrecognized QKV projection."""
+        if prefix.endswith(QKV_PROJECTION_SUFFIX) and not isinstance(
+            layer, QKVParallelLinear
+        ):
+            raise TypeError(
+                f"INT8 fake quantization cannot cover QKV projection {prefix!r}: "
+                f"expected QKVParallelLinear, got {type(layer).__name__}"
+            )
+        return super().get_quant_method(layer, prefix)
 
     @classmethod
     def linear_method(cls) -> LinearMethodBase:

@@ -2,11 +2,14 @@
 
 import pytest
 import torch
+from vllm.model_executor.layers.linear import QKVParallelLinear
 
 from inference_experiments.fake_quant import (
     INT4_MAX,
     INT8_MAX,
     FakeQuantization,
+    Int4FakeQuantConfig,
+    Int8FakeQuantConfig,
     fake_quantize_rows,
     int4_fake_quantize_rows,
 )
@@ -58,6 +61,52 @@ def test_fake_quantize_rows_uses_independent_symmetric_scales() -> None:
     )
     torch.testing.assert_close(result, expected, rtol=0, atol=0)
     assert result.dtype == torch.bfloat16
+
+
+def test_int8_fake_quantizes_fused_qkv_projection_rows_independently() -> None:
+    qkv_weight = torch.tensor(
+        [[1.0, 0.5], [0.25, 0.2], [4.0, 1.0]], dtype=torch.bfloat16
+    )
+
+    result = fake_quantize_rows(qkv_weight)
+
+    scales = (1.0 / INT8_MAX, 0.25 / INT8_MAX, 4.0 / INT8_MAX)
+    expected = torch.tensor(
+        [
+            [1.0, round(0.5 / scales[0]) * scales[0]],
+            [0.25, round(0.2 / scales[1]) * scales[1]],
+            [4.0, round(1.0 / scales[2]) * scales[2]],
+        ],
+        dtype=torch.bfloat16,
+    )
+    torch.testing.assert_close(result, expected, rtol=0, atol=0)
+
+
+def test_int8_config_selects_vllm_fused_qkv_projection() -> None:
+    layer = QKVParallelLinear.__new__(QKVParallelLinear)
+    torch.nn.Module.__init__(layer)
+
+    method = Int8FakeQuantConfig().get_quant_method(
+        layer, "model.layers.0.self_attn.qkv_proj"
+    )
+
+    assert method is not None
+    assert method.quantization_max == INT8_MAX
+
+
+def test_int8_config_rejects_unrecognized_fused_qkv_projection() -> None:
+    with pytest.raises(TypeError, match="cannot cover QKV projection"):
+        Int8FakeQuantConfig().get_quant_method(
+            torch.nn.Identity(), "model.layers.0.self_attn.qkv_proj"
+        )
+
+
+def test_int4_config_remains_unchanged_for_unrecognized_qkv_projection() -> None:
+    method = Int4FakeQuantConfig().get_quant_method(
+        torch.nn.Identity(), "model.layers.0.self_attn.qkv_proj"
+    )
+
+    assert method is None
 
 
 def test_fake_quantize_rows_preserves_zero_rows() -> None:
